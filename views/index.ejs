@@ -121,7 +121,7 @@
         
         // get a local stream, show it in our video tag and add it to be sent
         navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mediaDevices.getUserMedia;
-        var constraints = { 'audio': false, 'video': true };
+        var constraints = { 'audio': true, 'video': true };
         if(navigator.getUserMedia) {
           navigator.getUserMedia(constraints, function (stream) {
             displaySignalMessage("going to display my stream...");
