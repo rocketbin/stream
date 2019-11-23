@@ -116,30 +116,29 @@
         rtcPeerConn.ontrack = function (evt) {
           displaySignalMessage("going to add their stream...");
           theirVideoArea.srcObject = evt.streams[0];
-          
+
         };
         
         // get a local stream, show it in our video tag and add it to be sent
-        navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-        async function getMedia(constraints) {
-          let stream = null;
-
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              'audio': false,
-              'video': true
-            }, function (stream) {
-              displaySignalMessage("going to display my stream...");
-              myVideoArea.srcObject = stream
-              rtcPeerConn.addStream(stream);
-            }, logError);
-            /* use the stream */
-          } catch(err) {
-            /* handle the error */
-          }
+        navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mediaDevices.getUserMedia;
+        var constraints = { 'audio': false, 'video': true };
+        if(navigator.getUserMedia) {
+          navigator.getUserMedia(constraints, function (stream) {
+            displaySignalMessage("going to display my stream...");
+            myVideoArea.srcObject = stream;
+            rtcPeerConn.addStream(stream);
+          }, logError);
+        } else {
+          navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+            displaySignalMessage("going to display my stream...");
+            myVideoArea.srcObject = stream;
+            rtcPeerConn.addStream(stream);
+          })
+          .catch(function(err) {
+            logError
+          });
         }
 
-        
       }
     </script>
   </body>
