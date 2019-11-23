@@ -1,0 +1,146 @@
+<!doctype HTML>
+<html lang="en">
+  <head>
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- <link rel="stylesheet" href="style.css" type="text/css"> -->
+    <style>
+.hhm: {
+  height: 1080;
+  width: 1080;
+}
+    </style>
+  </head>
+  <body>
+    <video id = "myVideoTag" autoplay class="hhm"></video>
+    <video id="theirVideoTag" autoplay></video>
+    <div>
+      <label>Your Name</label><input id="myName" type="text"/>
+      <label>Message</label><input id="myMessage" type="text"/>
+      <input id="sendMessage" type="submit"/>
+      <div id="chatArea">Message Output:</br></div>
+      <div id="signalingArea">Signaling Messages:</br></div>
+    </div>
+
+    <script>
+      var myVideoArea = document.querySelector("#myVideoTag");
+      var theirVideoArea = document.querySelector("#theirVideoTag");
+      var myName = document.querySelector("#myName");
+      var myMessage = document.querySelector("#myMessage");
+      var sendMessage = document.querySelector("#sendMessage");
+      var chatArea = document.querySelector("#chatArea");
+      var signalingArea = document.querySelector("#signalingArea");
+      var ROOM = "chat";
+      var SIGNAL_ROOM = "signal_room";
+      var configuration = {
+        'iceServers': [{
+          'urls': 'stun:stun.l.google.com:19302'
+        }]
+      };
+      var rtcPeerConn;
+      io = io.connect();
+
+      io.emit('ready', {"chat_room": ROOM, "signal_room": SIGNAL_ROOM});
+      io.emit('signal',{"type":"user_here", "message":"Are you ready for a call?", "room":SIGNAL_ROOM});
+
+      io.on('signaling_message', function(data) {
+        displaySignalMessage("Signal received: " + data.type);
+        
+        //Setup the RTC Peer Connection object
+        if (!rtcPeerConn)
+          startSignaling();
+          
+        if (data.type != "user_here") {
+          var message = JSON.parse(data.message);
+          if (message.sdp) {
+            rtcPeerConn.setRemoteDescription(new RTCSessionDescription(message.sdp), function () {
+              // if we received an offer, we need to answer
+              if (rtcPeerConn.remoteDescription.type == 'offer') {
+                rtcPeerConn.createAnswer(sendLocalDesc, logError);
+              }
+            }, logError);
+          }
+          else {
+            rtcPeerConn.addIceCandidate(new RTCIceCandidate(message.candidate));
+          }
+        }
+      });
+
+      io.on('announce', function(data) {
+        displayMessage(data.message);
+      });
+      io.on('message', function(data) {
+        displayMessage(data.author + ": " + data.message);
+      });
+
+      function displayMessage(message) {
+        chatArea.innerHTML = chatArea.innerHTML + "<br/>" + message;
+      }
+      function displaySignalMessage(message) {
+        signalingArea.innerHTML = signalingArea.innerHTML + "<br/>" + message;
+      }
+      function logError(error) {
+        displaySignalMessage(error.name + ': ' + error.message);
+      }
+      function sendLocalDesc(desc) {
+        rtcPeerConn.setLocalDescription(desc, function () {
+          displaySignalMessage("sending local description");
+          io.emit('signal',{"type":"SDP", "message": JSON.stringify({ 'sdp': rtcPeerConn.localDescription }), "room":SIGNAL_ROOM});
+        }, logError);
+      }
+
+      sendMessage.addEventListener('click', function(ev){
+        io.emit('send', {"author":myName.value, "message":myMessage.value, "room":ROOM});
+        ev.preventDefault();
+      }, false);
+
+
+      function startSignaling() {
+        displaySignalMessage("starting signaling...");
+        
+        rtcPeerConn = new RTCPeerConnection(configuration);
+        
+        // send any ice candidates to the other peer
+        rtcPeerConn.onicecandidate = function (evt) {
+          if (evt.candidate)
+            io.emit('signal',{"type":"ice candidate", "message": JSON.stringify({ 'candidate': evt.candidate }), "room":SIGNAL_ROOM});
+          displaySignalMessage("completed that ice candidate...");
+        };
+        
+        // let the 'negotiationneeded' event trigger offer generation
+        rtcPeerConn.onnegotiationneeded = function () {
+          displaySignalMessage("on negotiation called");
+          rtcPeerConn.createOffer(sendLocalDesc, logError);
+        }
+        
+        // once remote stream arrives, show it in the remote video element
+        rtcPeerConn.ontrack = function (evt) {
+          displaySignalMessage("going to add their stream...");
+          theirVideoArea.srcObject = evt.streams[0];
+          
+        };
+        
+        // get a local stream, show it in our video tag and add it to be sent
+        navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+        async function getMedia(constraints) {
+          let stream = null;
+
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              'audio': false,
+              'video': true
+            }, function (stream) {
+              displaySignalMessage("going to display my stream...");
+              myVideoArea.srcObject = stream
+              rtcPeerConn.addStream(stream);
+            }, logError);
+            /* use the stream */
+          } catch(err) {
+            /* handle the error */
+          }
+        }
+
+        
+      }
+    </script>
+  </body>
+</html>
