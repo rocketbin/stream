@@ -1,134 +1,166 @@
 <!doctype HTML>
 <html lang="en">
   <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="/socket.io/socket.io.js"></script>
-    <!-- <link rel="stylesheet" href="style.css" type="text/css"> -->
-    <style>
-.hhm: {
-  height: 1080;
-  width: 1080;
-}
-    </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css">
+    <link rel="stylesheet" href="../style.css" type="text/css">
+    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
   </head>
   <body>
-    <video id = "myVideoTag" autoplay class="hhm"></video>
-    <video id="theirVideoTag" autoplay></video>
-    <div>
-      <label>Your Name</label><input id="myName" type="text"/>
-      <label>Message</label><input id="myMessage" type="text"/>
-      <input id="sendMessage" type="submit"/>
-      <div id="chatArea">Message Output:</br></div>
-      <div id="signalingArea">Signaling Messages:</br></div>
-    </div>
 
+<div class="modal is-active">
+  <div class="modal-background"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">join room as : </p>
+    </header>
+    <section class="modal-card-body">
+      <input id = "username" class="input" type="text" placeholder="Text input">
+    </section>
+    <footer class="modal-card-foot">
+      <button class="button is-success" onclick="joinroom()">join room</button>
+    </footer>
+  </div>
+</div>
+<section class="hero is-primary hero-maintop">
+  <div class="hero-body" style = "padding:10px">
+    <div class="container">
+      <h5 class="title hero-title">
+        
+      </h5>
+      <h2 class="subtitle hero-subtitle">
+        
+      </h2>
+    </div>
+  </div>
+</section>
+    <div class = "content-container">
+      <div class = "video-container" style = "position:relative">
+        <div class="my-video" style="">
+          <video id = "myVideoTag" class= "shadow-1" autoplay style = "position:relative"></video>        
+        </div>
+        <div class=  " flex flex-center" style = "position:relative">
+            <div class = "videos flex columns tile is-ancestor is-6" style="justify-content:space-around">
+              <!-- <video id="theirVideoTag" autoplay></video> -->
+            </div>
+        </div>
+      </div>
+      <div class = "data-container" >
+        <section class="hero is-small is-dark">
+          <div class="hero-body">
+            <div class="container">
+              <small class="subtitle" style="text-align:center">
+                messaging
+              </small>
+            </div>
+          </div>
+        </section>
+        <div class="flex" style="height:80%">
+          <div id="signalingArea" style = "display:none">Signaling Messages:</br></div>
+          <div id="chatArea" ></div>
+
+        </div>
+        <div class = "fg" style = "width:100%;height:20%">
+          <div class="level-item" style="width:100%" >
+            <div class="field has-addons" style="width:95%">
+              <p class="control" style="width:100%">
+                <input id = "myMessage" class="input" type="text" placeholder="Text input" style="width:100%"/>
+              </p>
+              <p class="control">
+                <button class="button is-success" id="sendMessage" type="submit">send</button>
+              </p>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+    <script src="../glob.js"></script>
     <script>
-      var myVideoArea = document.querySelector("#myVideoTag");
-      var theirVideoArea = document.querySelector("#theirVideoTag");
-      var myName = document.querySelector("#myName");
-      var myMessage = document.querySelector("#myMessage");
-      var sendMessage = document.querySelector("#sendMessage");
-      var chatArea = document.querySelector("#chatArea");
-      var signalingArea = document.querySelector("#signalingArea");
+      var peers = [];
       var ROOM = "chat";
       var SIGNAL_ROOM = "signal_room";
-      var configuration = {
-        'iceServers': [{
-          'urls': 'stun:stun.l.google.com:19302'
-        }]
-      };
+      var addedToIceServers = false;
       var rtcPeerConn;
       io = io.connect();
-
-      io.emit('ready', {"chat_room": ROOM, "signal_room": SIGNAL_ROOM});
-      io.emit('signal',{"type":"user_here", "message":"Are you ready for a call?", "room":SIGNAL_ROOM});
+      io.emit('ready', {"chat_room": ROOM, "signal_room": SIGNAL_ROOM, "peer": peername});
+      io.emit('signal',{"type":"user_here", "message":"Are you ready for a call?", "room":SIGNAL_ROOM, peerID: peername});
 
       io.on('signaling_message', function(data) {
-        displaySignalMessage("Signal received: " + data.type);
-        
-        //Setup the RTC Peer Connection object
-        if (!rtcPeerConn)
-          startSignaling();
-          
-        if (data.type != "user_here") {
-          var message = JSON.parse(data.message);
-          if (message.sdp) {
-            rtcPeerConn.setRemoteDescription(new RTCSessionDescription(message.sdp), function () {
-              // if we received an offer, we need to answer
-              if (rtcPeerConn.remoteDescription.type == 'offer') {
-                rtcPeerConn.createAnswer(sendLocalDesc, logError);
-              }
-            }, logError);
+        if(data.peerID !== peername) {
+          peers.push({id: data.peerID, connection: null});
+          var peer = peers.findIndex(p => p.id === data.peerID)
+          if(peers[peer].connection === null) {
+            logError({name:"FIRED ev", message: "event fired!"})
+            startSignaling(peer);
           }
-          else {
-            rtcPeerConn.addIceCandidate(new RTCIceCandidate(message.candidate));
+          if (data.type != "user_here") {
+            displaySignalMessage("OFFER FROM: " + data.peerID);
+            var message = JSON.parse(data.message);
+            if (message.sdp) {
+              peers[peer].connection.setRemoteDescription(new RTCSessionDescription(message.sdp), function () {
+                if (rtcPeerConn.remoteDescription.type == 'offer') {
+                  rtcPeerConn.createAnswer(sendLocalDesc, logError);
+                }
+              }, logError);
+            } else {
+                rtcPeerConn.addIceCandidate(new RTCIceCandidate(message.candidate));
+            }
           }
         }
+      });
+
+      io.on('ready', function(data) {
+        console.log("ready")
+        console.log(data)
+      });
+
+      io.on('ready', function(data) {
+        console.log("ready")
+        console.log(data)
       });
 
       io.on('announce', function(data) {
         displayMessage(data.message);
       });
+
       io.on('message', function(data) {
-        displayMessage(data.author + ": " + data.message);
+        var onSelf = data.author === username.value ? true : false;
+        displayMessage(data.author + ": " + data.message,  onSelf);
       });
 
-      function displayMessage(message) {
-        chatArea.innerHTML = chatArea.innerHTML + "<br/>" + message;
-      }
-      function displaySignalMessage(message) {
-        signalingArea.innerHTML = signalingArea.innerHTML + "<br/>" + message;
-      }
-      function logError(error) {
-        displaySignalMessage(error.name + ': ' + error.message);
-      }
-      function sendLocalDesc(desc) {
-        rtcPeerConn.setLocalDescription(desc, function () {
-          displaySignalMessage("sending local description");
-          io.emit('signal',{"type":"SDP", "message": JSON.stringify({ 'sdp': rtcPeerConn.localDescription }), "room":SIGNAL_ROOM});
-        }, logError);
-      }
-
       sendMessage.addEventListener('click', function(ev){
-        io.emit('send', {"author":myName.value, "message":myMessage.value, "room":ROOM});
+        io.emit('send', {"author":username.value, "message":myMessage.value, "room":ROOM});
         ev.preventDefault();
       }, false);
 
 
-      function startSignaling() {
+      function startSignaling(peer) {
         displaySignalMessage("starting signaling...");
-        
         rtcPeerConn = new RTCPeerConnection(configuration);
-        
+        peers[peer].connection = rtcPeerConn;
         // send any ice candidates to the other peer
         rtcPeerConn.onicecandidate = function (evt) {
+          addedToIceServers = true
           if (evt.candidate)
-            io.emit('signal',{"type":"ice candidate", "message": JSON.stringify({ 'candidate': evt.candidate }), "room":SIGNAL_ROOM});
-          displaySignalMessage("completed that ice candidate...");
+            io.emit('signal',{"type":"ice candidate",peerID: peername, "message": JSON.stringify({ 'candidate': evt.candidate }), "room":SIGNAL_ROOM});
+          // displaySignalMessage("completed that ice candidate...");
         };
         
         // let the 'negotiationneeded' event trigger offer generation
         rtcPeerConn.onnegotiationneeded = function () {
-          displaySignalMessage("on negotiation called");
           rtcPeerConn.createOffer(sendLocalDesc, logError);
         }
         
         // once remote stream arrives, show it in the remote video element
         rtcPeerConn.ontrack = function (evt) {
           displaySignalMessage("going to add their stream...");
-          theirVideoArea.srcObject = evt.streams[0];
-
+          createVideo(evt.streams[0])
+          // theirVideoArea.srcObject = evt.streams[0];
         };
-        
-        // get a local stream, show it in our video tag and add it to be sent
-        navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mediaDevices.getUserMedia;
-        var constraints = { 'audio': true, 'video': true };
-        if(navigator.getUserMedia) {
-          navigator.getUserMedia(constraints, function (stream) {
-            displaySignalMessage("going to display my stream...");
-            myVideoArea.srcObject = stream;
-            rtcPeerConn.addStream(stream);
-          }, logError);
-        } else {
+
+        var constraints = { 'audio': false, 'video': true };
           navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
             displaySignalMessage("going to display my stream...");
             myVideoArea.srcObject = stream;
@@ -138,8 +170,9 @@
             logError
           });
         }
+      
 
-      }
+      // }
     </script>
   </body>
 </html>

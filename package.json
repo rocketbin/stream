@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "bulma": "^0.8.0",
     "coffee-script": "^1.12.7",
     "connect": "^3.7.0",
     "ejs": "2.x",
