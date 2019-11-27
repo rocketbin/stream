@@ -1,0 +1,156 @@
+<!doctype HTML>
+<html lang="en">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.8.0/css/bulma.min.css">
+    <link rel="stylesheet" href="../style.css" type="text/css">
+    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+  </head>
+  <body>
+
+<div class="modal ">
+  <div class="modal-background"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">join room as : </p>
+    </header>
+    <section class="modal-card-body">
+      <input id = "username" class="input" type="text" placeholder="Text input">
+    </section>
+    <footer class="modal-card-foot">
+      <button class="button is-success" onclick="joinroom()">join room</button>
+    </footer>
+  </div>
+</div>
+<section class="hero is-primary hero-maintop">
+  <div class="hero-body" style = "padding:10px">
+    <div class="container">
+      <h5 class="title hero-title">
+        
+      </h5>
+      <h2 class="subtitle hero-subtitle">
+        
+      </h2>
+    </div>
+  </div>
+</section>
+    <div class = "content-container">
+      <div class = "video-container" style = "position:relative">
+        <div class="my-video" style="">
+          <video id = "myVideoTag" class= "shadow-1" autoplay style = "position:relative"></video>        
+        </div>
+        <div class=  " flex flex-center" style = "position:relative">
+            <div class = "videos flex columns tile is-ancestor is-6" style="justify-content:space-around">
+              <!-- <video id="theirVideoTag" autoplay></video> -->
+            </div>
+        </div>
+      </div>
+      <div class = "data-container" >
+        <section class="hero is-small is-dark">
+          <div class="hero-body">
+            <div class="container">
+              <small class="subtitle" style="text-align:center">
+                messaging
+              </small>
+            </div>
+          </div>
+        </section>
+        <div class="flex" style="height:80%">
+          <div id="signalingArea" style = "display:none">Signaling Messages:</br></div>
+          <div id="chatArea" ></div>
+
+        </div>
+        <div class = "fg" style = "width:100%;height:20%">
+          <div class="level-item" style="width:100%" >
+            <div class="field has-addons" style="width:95%">
+              <p class="control" style="width:100%">
+                <input id = "myMessage" class="input" type="text" placeholder="Text input" style="width:100%"/>
+              </p>
+              <p class="control">
+                <button class="button is-success" id="sendMessage" type="submit">send</button>
+              </p>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+    <script src="../quary.js"></script>
+  </body>
+</html>
+<script>
+  var myVideoArea = document.querySelector("#myVideoTag");
+  var peers = [], onConnectedPeers = [], consec = []; console.log(peername)
+  var peeredOffer = [];
+  var ROOM = "chat";
+  var SIGNAL_ROOM = "signal_room";
+  io = io.connect();
+  io.emit('ready', {"chat_room": ROOM, "signal_room": SIGNAL_ROOM, "peer": peername});
+  function tasker(data){
+  }
+  io.on('signaling_message', function(data) {
+    peers = removeSelf(data.cls.slice())
+    peers.filter(p => !onConnectedPeers.includes(p.peerID)).map(p => {
+      // if(window.location.href.includes("#")) {
+        // peerInstance.addIceCandidate(new RTCIceCandidate(message.candidate));
+        if(!p.peerInstance) {
+          p.peerInstance = startStreaming(p.peerInstance, p.peerID);
+          onConnectedPeers.push(p.peerID)
+          consec.push({peerID: p.peerID, instance: p.peerInstance})
+        }
+        // negotiateOffer(peerInstance).then(r => {
+        //   io.emit('signal',{offer:JSON.stringify({ 'sdp': r }), type:"push_offer"});
+        // })
+      // }
+    });
+  });
+  io.on('push_offer', function(data) {
+    if(data.offType.type === "push_offer") {
+    let peerInstance;
+    let peer = consec.filter(p => p.peerID === data.offType.peerID)[0];
+    if(peer === undefined) {
+      if(!onConnectedPeers.includes(data.offType.peerID)) {
+        peer = peers.filter(p => p.peerID === data.offType.peerID)[0];
+        peerInstance = startStreaming(peer.peerInstance, peer.peerID);
+        consec.push({peerID: peer.peerID, instance: peer.peerInstance})
+        onConnectedPeers.push(peer.peerID)
+      }
+    } else {
+      peerInstance = consec.filter(p => p.peerID === data.offType.peerID)[0].instance;
+    }
+    console.log(peerInstance)
+    var offer = JSON.parse(data.offType.offer);
+    peerInstance.setRemoteDescription(offer.sdp)
+      .then(() => peerInstance.createAnswer())
+      .then(sdp => {
+        return peerInstance.setLocalDescription(sdp)
+      })
+      .then(function () {
+          io.emit('signal', {type: "push_answer",answer:  peerInstance.localDescription, peerID: peername});
+      })
+      peerInstance.onaddstream = function (ev) {
+        createVideo(ev.stream)
+      }
+    }
+})
+  io.on('ice_candidate', function(data) {
+      if(data.offType.type === "ice_candidate") {
+        peerInstance = peers.filter(p => p.peerID === data.offType.peerID)[0].peerInstance
+        if(peerInstance) {
+          peerInstance.addIceCandidate(new RTCIceCandidate(JSON.parse(data.offType.candidate)))
+        }
+      }
+  })
+
+  io.on('push_answer', function(data) {
+    if(data.offType.type === "push_answer") {
+      console.log(consec)
+      console.log(data.offType.peerID)
+      console.log(consec.filter(p => p.peerID === data.offType.peerID)[0])
+      peerInstance = consec.filter(p => p.peerID === data.offType.peerID)[0].instance
+      peerInstance.setRemoteDescription(data.offType.answer);
+    }
+  });
+  io.emit('signal',{"type":"user_here", "peerID":peername, "room":"signal_room", "peerInstance": null});
+</script>

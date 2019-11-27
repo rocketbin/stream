@@ -6,6 +6,7 @@
     "bulma": "^0.8.0",
     "coffee-script": "^1.12.7",
     "connect": "^3.7.0",
+    "cors": "^2.8.5",
     "ejs": "2.x",
     "express": "4.x",
     "express.io": "^1.1.13"

@@ -1,7 +1,7 @@
 var myVideoArea = document.querySelector("#myVideoTag");
 var modal = document.querySelector(".modal");
 var username = document.querySelector("#username")
-var peername = makeid(5);
+var peername = makeid(5); 
 var videos = document.querySelector(".videos");
 var myMessage = document.querySelector("#myMessage");
 var sendMessage = document.querySelector("#sendMessage");
@@ -15,7 +15,6 @@ var configuration = {
 };
 
   function joinroom () {
-  	console.log(username.value)
   	modal.classList.remove("is-active");
   	document.querySelector(".hero-title").innerHTML = `Hi, ${username.value}`
   	document.querySelector(".hero-subtitle").innerHTML = "you're in room: classroom"
@@ -40,7 +39,7 @@ var configuration = {
     displaySignalMessage(error.name + ': <span style= "color:red">' + error.message + '</span>');
   }
 
-  function sendLocalDesc(desc) {
+  function sendLocalDesc(desc, connection) {
     rtcPeerConn.setLocalDescription(desc, function () {
       io.emit('signal',{"type":"SDP", peerID: peername, "message": JSON.stringify({ 'sdp': rtcPeerConn.localDescription }), "room":SIGNAL_ROOM, });
     }, logError);
